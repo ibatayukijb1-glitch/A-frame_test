@@ -5,9 +5,40 @@
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <style>
     /* 操作パネルのスタイル */
-    .ui-panel { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; font-family: sans-serif; width: 180px; }
-    .control-group { background: rgba(0,0,0,0.8); padding: 12px; border-radius: 12px; color: white; display: flex; flex-direction: column; gap: 8px; }
-    button { padding: 10px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; transition: 0.2s; }
+    .ui-panel { 
+      position: fixed; 
+      bottom: 20px; 
+      right: 20px; 
+      z-index: 1000; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 10px; 
+      font-family: sans-serif; 
+      width: 180px; 
+      /* パネル全体でのズーム・スクロールを完全に禁止 */
+      touch-action: none; 
+    }
+
+    .control-group { 
+      background: rgba(0,0,0,0.8); 
+      padding: 12px; 
+      border-radius: 12px; 
+      color: white; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 8px; 
+    }
+
+    button { 
+      padding: 10px; 
+      font-weight: bold; 
+      border-radius: 6px; 
+      border: none; 
+      cursor: pointer; 
+      transition: 0.2s; 
+      /* ボタンの反応を速くし、連打によるズームを防止 */
+      touch-action: manipulation; 
+    }
     .btn-slice { background: #FF4500; color: white; }
     .btn-invert { background: #4CAF50; color: white; }
     .btn-move { background: #444; color: white; flex: 1; font-size: 12px; }
