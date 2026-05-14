@@ -172,13 +172,22 @@
     ];
 
     // --- 回転処理のイベントリスナー ---
-    window.addEventListener('mousedown', e => { if(!e.target.closest('.ui-panel')) isDragging = true; });
+    window.addEventListener('mousedown', e => { 
+        if(!e.target.closest('.ui-panel')) {
+            isDragging = true;
+            // これを追加：マウスを押した瞬間の座標を基準点にする
+            previousPosition = { x: e.clientX, y: e.clientY };
+        }
+    });
+
     window.addEventListener('touchstart', e => { 
         if(!e.target.closest('.ui-panel')) {
             isDragging = true;
+            // 指が触れた瞬間の座標を基準点にする（これは既に入っていますが、念のため確認）
             previousPosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         }
     });
+
     window.addEventListener('mouseup', () => isDragging = false);
     window.addEventListener('touchend', () => isDragging = false);
 
