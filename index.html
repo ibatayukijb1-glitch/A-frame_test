@@ -193,18 +193,43 @@
 
     const handleMove = (x, y) => {
         if (!isDragging) return;
+
         const deltaX = x - previousPosition.x;
         const deltaY = y - previousPosition.y;
-        
-        let rotation = rotationGroup.getAttribute('rotation');
-        rotation.y -= deltaX * 0.5;
-        rotation.x += deltaY * 0.5;
-        
 
-        rotationGroup.setAttribute('rotation', rotation);
-        
+        const cameraObj = document.querySelector('[camera]').object3D;
+        const targetObj = rotationGroup.object3D;
+
+        // 1. カメラから見た「右」と「上」の方向ベクトルを取得
+        let moveDirX = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraObj.quaternion);
+        let moveDirY = new THREE.Vector3(0, 1, 0).applyQuaternion(cameraObj.quaternion);
+
+        // 2. 【重要】これらのベクトルを「立方体の今の向き」の逆行列で変換
+        // これにより「カメラの右」が「立方体にとってのどの軸か」に直る
+        targetObj.updateMatrixWorld();
+        let invMat = new THREE.Matrix4().copy(targetObj.matrixWorld).invert();
+        moveDirX.transformDirection(invMat);
+        moveDirY.transformDirection(invMat);
+
+        // 3. 立方体ローカルの回転軸を作成
+        // 左右フリック (deltaX) は「カメラの上軸」に対応する立方体の軸を中心に回す
+        // 上下フリック (deltaY) は「カメラの右軸」に対応する立方体の軸を中心に回す
+        const qX = new THREE.Quaternion().setFromAxisAngle(moveDirY, deltaX * 0.005);
+        const qY = new THREE.Quaternion().setFromAxisAngle(moveDirX, deltaY * 0.005);
+
+        // 4. 立方体のローカル回転（quaternion）に直接掛ける
+        targetObj.quaternion.multiply(qX);
+        targetObj.quaternion.multiply(qY);
+
+        // 5. A-Frameの属性に反映
+        rotationGroup.setAttribute('rotation', {
+            x: THREE.MathUtils.radToDeg(targetObj.rotation.x),
+            y: THREE.MathUtils.radToDeg(targetObj.rotation.y),
+            z: THREE.MathUtils.radToDeg(targetObj.rotation.z)
+        });
+
         previousPosition = { x, y };
-    };
+    };    
 
     window.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
     window.addEventListener('touchmove', e => handleMove(e.touches[0].clientX, e.touches[0].clientY));
