@@ -120,6 +120,39 @@
   </a-scene>
 
   <script>
+    // --- スマホのズームを物理的に黙らせる最終手段 ---
+    (function() {
+        // 1. ダブルタップ（0.3秒以内の連続タップ）を検知してズーム動作だけをキャンセル
+        let lastTouchTime = 0;
+        document.addEventListener('touchstart', function(event) {
+            const now = Date.now();
+            if (now - lastTouchTime <= 300) {
+                // 2本以上の指（ピンチ）でなければ、デフォルト動作（ズーム）を阻止
+                if (event.touches.length <= 1) {
+                    // event.preventDefault(); // これを入れるとボタンが反応しなくなるので、ここでは入れない
+                }
+            }
+            lastTouchTime = now;
+        }, { passive: true });
+
+        // 2. [決定打] 画面全体のジェスチャー（ズーム）をイベントレベルで止める
+        document.addEventListener('gesturestart', function(e) {
+            e.preventDefault();
+        });
+
+        // 3. UIパネル上でのダブルタップによる拡大を「パッシブでない」イベントで阻止
+        const panel = document.querySelector('.ui-panel');
+        if (panel) {
+            panel.addEventListener('touchend', function(e) {
+                const now = Date.now();
+                if (now - lastTouchTime <= 300) {
+                    e.preventDefault(); // ここでズームを阻止
+                    e.target.click();   // 代わりにクリックを手動で発火させてボタンを反応させる
+                }
+                lastTouchEnd = now;
+            }, false);
+        }
+    })();
     let geometry, shaderMaterial;
     const res = 50;
     let selectedPointId = 'p1';
