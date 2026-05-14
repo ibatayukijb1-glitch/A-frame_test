@@ -1,0 +1,287 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <style>
+    /* 操作パネルのスタイル */
+    .ui-panel { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; font-family: sans-serif; width: 180px; }
+    .control-group { background: rgba(0,0,0,0.8); padding: 12px; border-radius: 12px; color: white; display: flex; flex-direction: column; gap: 8px; }
+    button { padding: 10px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; transition: 0.2s; }
+    .btn-slice { background: #FF4500; color: white; }
+    .btn-invert { background: #4CAF50; color: white; }
+    .btn-move { background: #444; color: white; flex: 1; font-size: 12px; }
+    .btn-move:active { background: #666; }
+    .point-selector { display: flex; gap: 4px; }
+    .point-btn { flex: 1; background: #666; color: white; font-size: 12px; }
+    .active-point { background: #FFD700 !important; color: black !important; border: 2px solid white !important; }
+    .axis-row { display: flex; gap: 4px; align-items: center; justify-content: space-between; }
+    .axis-label { font-size: 12px; font-weight: bold; color: #aaa; width: 15px; }
+
+    /* --- スマホ用の調整 (画面幅が600px以下の場合) --- */
+    @media screen and (max-width: 600px) {
+        .ui-panel { 
+        width: 130px; /* 全体の幅を小さく */
+        bottom: 10px; right: 10px; gap: 6px; 
+        }
+        .control-group { 
+        padding: 8px; gap: 5px; border-radius: 8px; 
+        }
+        button { 
+        padding: 7px; font-size: 10px; /* ボタンを小さく、文字も小さく */
+        }
+        .btn-move, .point-btn, .axis-label { 
+        font-size: 9px; /* 各ラベルの文字を最小限に */
+        }
+        .axis-label { width: 10px; }
+        .control-group div:first-child { font-size: 10px !important; } /* 「操作する点を選択」の文字 */
+    }
+  </style>
+</head>
+<body style="margin: 0; overflow: hidden;">
+
+  <div class="ui-panel">
+    <div class="control-group">
+      <div style="font-size: 12px; text-align: center; margin-bottom: 2px;">操作する点を選択</div>
+      <div class="point-selector">
+        <button id="btn-p1" class="point-btn active-point" onclick="selectPoint('p1')">P1</button>
+        <button id="btn-p2" class="point-btn" onclick="selectPoint('p2')">P2</button>
+        <button id="btn-p3" class="point-btn" onclick="selectPoint('p3')">P3</button>
+      </div>
+      
+      <div class="axis-row">
+        <span class="axis-label" style="color: #FF4500;">X</span>
+        <button class="btn-move" style="border-left: 4px solid #FF4500;" onclick="movePoint('x', 0.1)">+</button>
+        <button class="btn-move" style="border-left: 4px solid #FF4500;" onclick="movePoint('x', -0.1)">-</button>
+      </div>
+      <div class="axis-row">
+        <span class="axis-label" style="color: #32CD32;">Y</span>
+        <button class="btn-move" style="border-left: 4px solid #32CD32;" onclick="movePoint('y', 0.1)">+</button>
+        <button class="btn-move" style="border-left: 4px solid #32CD32;" onclick="movePoint('y', -0.1)">-</button>
+      </div>
+      <div class="axis-row">
+        <span class="axis-label" style="color: #1E90FF;">Z</span>
+        <button class="btn-move" style="border-left: 4px solid #1E90FF;" onclick="movePoint('z', 0.1)">+</button>
+        <button class="btn-move" style="border-left: 4px solid #1E90FF;" onclick="movePoint('z', -0.1)">-</button>
+      </div>
+    </div>
+
+    <button class="btn-slice" onclick="addSlice()">現在の3点で切断</button>
+    <button class="btn-invert" onclick="toggleInvert()">表示を反転</button>
+    <button style="background: #333; color: white;" onclick="location.reload()">リセット</button>
+  </div>
+
+  <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+    <a-marker preset="hiro" smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
+      <a-entity id="rotation-group">
+        <a-entity position="-0.5 -0.5 -0.5">
+          <a-entity id="cloud-container"></a-entity>
+          <a-entity id="plane-container"></a-entity>
+          <a-entity id="edges-container"></a-entity>
+
+          <a-sphere id="p1" position="1 1 0" radius="0.04" color="#FFFFFF"></a-sphere>
+          <a-sphere id="p2" position="0 1 1" radius="0.04" color="#FFD700"></a-sphere>
+          <a-sphere id="p3" position="1 0 1" radius="0.04" color="#FFD700"></a-sphere>
+        </a-entity>
+      </a-entity>
+    </a-marker>
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    let geometry, shaderMaterial;
+    const res = 50;
+    let selectedPointId = 'p1';
+
+    // 回転制御用の状態変数
+    let isDragging = false;
+    let previousPosition = { x: 0, y: 0 };
+    const rotationGroup = document.querySelector('#rotation-group');
+
+    const cubeEdges = [
+        [new THREE.Vector3(0,0,0), new THREE.Vector3(1,0,0)], [new THREE.Vector3(1,0,0), new THREE.Vector3(1,1,0)],
+        [new THREE.Vector3(1,1,0), new THREE.Vector3(0,1,0)], [new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0)],
+        [new THREE.Vector3(0,0,1), new THREE.Vector3(1,0,1)], [new THREE.Vector3(1,0,1), new THREE.Vector3(1,1,1)],
+        [new THREE.Vector3(1,1,1), new THREE.Vector3(0,1,1)], [new THREE.Vector3(0,1,1), new THREE.Vector3(0,0,1)],
+        [new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,1)], [new THREE.Vector3(1,0,0), new THREE.Vector3(1,0,1)],
+        [new THREE.Vector3(1,1,0), new THREE.Vector3(1,1,1)], [new THREE.Vector3(0,1,0), new THREE.Vector3(0,1,1)]
+    ];
+
+    // --- 回転処理のイベントリスナー ---
+    window.addEventListener('mousedown', e => { if(!e.target.closest('.ui-panel')) isDragging = true; });
+    window.addEventListener('touchstart', e => { 
+        if(!e.target.closest('.ui-panel')) {
+            isDragging = true;
+            previousPosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+    });
+    window.addEventListener('mouseup', () => isDragging = false);
+    window.addEventListener('touchend', () => isDragging = false);
+
+    const handleMove = (x, y) => {
+        if (!isDragging) return;
+        const deltaX = x - previousPosition.x;
+        const deltaY = y - previousPosition.y;
+        
+        let rotation = rotationGroup.getAttribute('rotation');
+        rotation.y -= deltaX * 0.5;
+        rotation.x += deltaY * 0.5;
+        
+
+        rotationGroup.setAttribute('rotation', rotation);
+        
+        previousPosition = { x, y };
+    };
+
+    window.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+    window.addEventListener('touchmove', e => handleMove(e.touches[0].clientX, e.touches[0].clientY));
+
+    // --- UI用関数 ---
+    function selectPoint(id) {
+      selectedPointId = id;
+      document.querySelectorAll('.point-btn').forEach(btn => btn.classList.remove('active-point'));
+      document.getElementById('btn-' + id).classList.add('active-point');
+      ['p1', 'p2', 'p3'].forEach(pId => {
+        const sphere = document.getElementById(pId);
+        sphere.setAttribute('color', pId === id ? '#FFFFFF' : '#FFD700');
+      });
+    }
+
+    function movePoint(axis, delta) {
+        const el = document.getElementById(selectedPointId);
+        let pos = el.getAttribute('position');
+        let nextVal = Math.round((Math.max(0, Math.min(1, pos[axis] + delta))) * 10) / 10;
+        let tempPos = { x: pos.x, y: pos.y, z: pos.z };
+        tempPos[axis] = nextVal;
+        const isInside = (val) => val > 0 && val < 1;
+        if (isInside(tempPos.x) && isInside(tempPos.y) && isInside(tempPos.z)) {
+            showErrorMessage("立方体の内部には移動できません", 1000); 
+            return;
+        }
+        pos[axis] = nextVal;
+        el.setAttribute('position', pos);
+    }
+
+    function showErrorMessage(message, duration) {
+        if (document.getElementById('error-toast')) return;
+        const el = document.createElement('div');
+        el.id = 'error-toast';
+        el.innerText = message;
+        el.style.cssText = "position:fixed; top:20%; left:50%; transform:translate(-50%, -50%); background:rgba(255,0,0,0.8); color:white; padding:15px 25px; border-radius:30px; font-weight:bold; z-index:2000; pointer-events:none;";
+        document.body.appendChild(el);
+        setTimeout(() => { if (el.parentNode) document.body.removeChild(el); }, duration);
+    }
+
+    document.querySelector('a-scene').addEventListener('loaded', () => {
+      geometry = new THREE.BufferGeometry();
+      const posArray = [], alphaArray = [];
+      for (let x = 0; x <= res; x++) {
+        for (let y = 0; y <= res; y++) {
+          for (let z = 0; z <= res; z++) {
+            posArray.push(x / res, y / res, z / res);
+            alphaArray.push(1.0);
+          }
+        }
+      }
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(posArray, 3));
+      geometry.setAttribute('alpha', new THREE.Float32BufferAttribute(alphaArray, 1));
+
+      shaderMaterial = new THREE.ShaderMaterial({
+        transparent: false,
+        vertexShader: `
+          attribute float alpha;
+          varying float vAlpha;
+          void main() {
+            vAlpha = alpha;
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = 10.0; 
+            gl_Position = projectionMatrix * mvPosition;
+          }
+        `,
+        fragmentShader: `
+          varying float vAlpha;
+          void main() {
+            if (vAlpha < 0.1) discard;
+            gl_FragColor = vec4(0.0, 0.0, 1.0, vAlpha);
+          }
+        `
+      });
+
+      const pointsMesh = new THREE.Points(geometry, shaderMaterial);
+      document.querySelector('#cloud-container').object3D.add(pointsMesh);
+
+      const boxGeom = new THREE.BoxGeometry(1.03, 1.03, 1.03);
+      const edgesGeom = new THREE.EdgesGeometry(boxGeom);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+      const wireframe = new THREE.LineSegments(edgesGeom, lineMat);
+      wireframe.position.set(0.5, 0.5, 0.5);
+      document.querySelector('#edges-container').object3D.add(wireframe);
+
+      // AxesHelperも回転グループの中（立方体の左下）に配置
+      const axesHelper = new THREE.AxesHelper(1.5);
+      axesHelper.position.set(-0.3, -0.3, -0.3);
+      document.querySelector('#cloud-container').parentElement.object3D.add(axesHelper);
+    });
+
+    function addSlice() {
+        const p1Pos = document.querySelector('#p1').getAttribute('position');
+        const p2Pos = document.querySelector('#p2').getAttribute('position');
+        const p3Pos = document.querySelector('#p3').getAttribute('position');
+        const v1 = new THREE.Vector3(p1Pos.x, p1Pos.y, p1Pos.z);
+        const v2 = new THREE.Vector3(p2Pos.x, p2Pos.y, p2Pos.z);
+        const v3 = new THREE.Vector3(p3Pos.x, p3Pos.y, p3Pos.z);
+        const cross = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(v2, v1), new THREE.Vector3().subVectors(v3, v1));
+        if (cross.length() < 0.0001) { showErrorMessage("3点が直線上にあります", 2000); return; }
+
+        const plane = new THREE.Plane().setFromCoplanarPoints(v1, v2, v3);
+        if (plane.distanceToPoint(new THREE.Vector3(0.5, 0.5, 0.5)) > 0) plane.negate();
+
+        const alphas = geometry.attributes.alpha.array;
+        const positions = geometry.attributes.position.array;
+        for (let i = 0; i < alphas.length; i++) {
+            if (alphas[i] < 0.5) continue;
+            const p = new THREE.Vector3(positions[i*3], positions[i*3+1], positions[i*3+2]);
+            if (plane.distanceToPoint(p) > 0.001) alphas[i] = 0.0;
+        }
+        geometry.attributes.alpha.needsUpdate = true;
+        createVisualPlane(plane);
+    }
+
+    function createVisualPlane(plane) {
+        const intersections = [];
+        const line = new THREE.Line3();
+        cubeEdges.forEach(edge => {
+            line.set(edge[0], edge[1]);
+            const target = new THREE.Vector3();
+            if (plane.intersectLine(line, target)) {
+                if (!intersections.some(p => p.distanceTo(target) < 0.001)) intersections.push(target);
+            }
+        });
+        if (intersections.length < 3) return;
+        const center = new THREE.Vector3(0, 0, 0);
+        intersections.forEach(p => center.add(p));
+        center.divideScalar(intersections.length);
+        const v1 = new THREE.Vector3().subVectors(intersections[0], center).normalize();
+        const v2 = new THREE.Vector3().crossVectors(plane.normal, v1).normalize();
+        intersections.sort((a, b) => Math.atan2(a.clone().sub(center).dot(v2), a.clone().sub(center).dot(v1)) - Math.atan2(b.clone().sub(center).dot(v2), b.clone().sub(center).dot(v1)));
+
+        const shape = new THREE.Shape();
+        intersections.forEach((p, i) => {
+            const x = p.clone().sub(center).dot(v1);
+            const y = p.clone().sub(center).dot(v2);
+            if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+        });
+        const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: false }), new THREE.MeshBasicMaterial({ color: 0xFF0000, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
+        mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(v1, v2, plane.normal));
+        mesh.position.copy(center.clone().addScaledVector(plane.normal, -0.02));
+        document.querySelector('#plane-container').object3D.add(mesh);
+    }
+
+    function toggleInvert() {
+      const alphas = geometry.attributes.alpha.array;
+      for (let i = 0; i < alphas.length; i++) alphas[i] = Math.abs(alphas[i] - 1.0);
+      geometry.attributes.alpha.needsUpdate = true;
+    }
+  </script>
+</body>
+</html>
