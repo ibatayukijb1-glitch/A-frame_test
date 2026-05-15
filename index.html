@@ -135,10 +135,7 @@
             lastTouchTime = now;
         }, { passive: true });
 
-        // 2. [決定打] 画面全体のジェスチャー（ズーム）をイベントレベルで止める
-        document.addEventListener('gesturestart', function(e) {
-            e.preventDefault();
-        });
+        
 
         // 3. UIパネル上でのダブルタップによる拡大を「パッシブでない」イベントで阻止
         const panel = document.querySelector('.ui-panel');
