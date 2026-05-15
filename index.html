@@ -82,18 +82,18 @@
       
       <div class="axis-row">
         <span class="axis-label" style="color: #FF4500;">X</span>
-        <button class="btn-move" style="border-left: 4px solid #FF4500;" onclick="movePoint('x', 0.1)">+</button>
-        <button class="btn-move" style="border-left: 4px solid #FF4500;" onclick="movePoint('x', -0.1)">-</button>
+        <button class="btn-move" style="border-left: 4px solid #FF4500;" onclick="movePoint('x', 0.25)">+</button>
+        <button class="btn-move" style="border-left: 4px solid #FF4500;" onclick="movePoint('x', -0.25)">-</button>
       </div>
       <div class="axis-row">
         <span class="axis-label" style="color: #32CD32;">Y</span>
-        <button class="btn-move" style="border-left: 4px solid #32CD32;" onclick="movePoint('y', 0.1)">+</button>
-        <button class="btn-move" style="border-left: 4px solid #32CD32;" onclick="movePoint('y', -0.1)">-</button>
+        <button class="btn-move" style="border-left: 4px solid #32CD32;" onclick="movePoint('y', 0.25)">+</button>
+        <button class="btn-move" style="border-left: 4px solid #32CD32;" onclick="movePoint('y', -0.25)">-</button>
       </div>
       <div class="axis-row">
         <span class="axis-label" style="color: #1E90FF;">Z</span>
-        <button class="btn-move" style="border-left: 4px solid #1E90FF;" onclick="movePoint('z', 0.1)">+</button>
-        <button class="btn-move" style="border-left: 4px solid #1E90FF;" onclick="movePoint('z', -0.1)">-</button>
+        <button class="btn-move" style="border-left: 4px solid #1E90FF;" onclick="movePoint('z', 0.25)">+</button>
+        <button class="btn-move" style="border-left: 4px solid #1E90FF;" onclick="movePoint('z', -0.25)">-</button>
       </div>
     </div>
 
@@ -248,7 +248,7 @@
     function movePoint(axis, delta) {
         const el = document.getElementById(selectedPointId);
         let pos = el.getAttribute('position');
-        let nextVal = Math.round((Math.max(0, Math.min(1, pos[axis] + delta))) * 10) / 10;
+        let nextVal = Math.round((Math.max(0, Math.min(1, pos[axis] + delta))) * 4) / 4;
         let tempPos = { x: pos.x, y: pos.y, z: pos.z };
         tempPos[axis] = nextVal;
         const isInside = (val) => val > 0 && val < 1;
@@ -369,7 +369,19 @@
             const y = p.clone().sub(center).dot(v2);
             if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
         });
-        const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: false }), new THREE.MeshBasicMaterial({ color: 0xFF0000, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
+        const mesh = new THREE.Mesh(
+            new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: false }), 
+            new THREE.MeshBasicMaterial({ 
+                color: 0xFF0000, 
+                side: THREE.DoubleSide, 
+                transparent: true, 
+                opacity: 0.9,
+                // チラツキ防止設定
+                polygonOffset: true,
+                polygonOffsetFactor: -1,
+                polygonOffsetUnits: -1
+            })
+        );
         mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(v1, v2, plane.normal));
         mesh.position.copy(center.clone().addScaledVector(plane.normal, -0.02));
         document.querySelector('#plane-container').object3D.add(mesh);
